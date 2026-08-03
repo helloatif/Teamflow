@@ -1,20 +1,26 @@
 import { AppError } from '../errors/appError.js';
 import type { ProjectRepository, ProjectStatus } from '../repositories/projectRepository.js';
 import type { TeamRepository } from '../repositories/teamRepository.js';
+import type { ActivityLogService } from './activityLogService.js';
 
 export class ProjectService {
   constructor(
     private readonly projectRepository: ProjectRepository,
-    private readonly teamRepository: TeamRepository
+    private readonly teamRepository: TeamRepository,
+    private readonly activityLogService?: ActivityLogService
   ) {}
 
-  async createProject(input: { teamId: string; name: string; description?: string | null }) {
+  async createProject(input: { teamId: string; name: string; description?: string | null; actorId?: string }) {
     await this.requireTeam(input.teamId);
-    return this.projectRepository.create({
+    const project = await this.projectRepository.create({
       teamId: input.teamId,
       name: input.name.trim(),
       description: input.description?.trim() || null,
     });
+    if (this.activityLogService && input.actorId) {
+      await this.activityLogService.record({ teamId: input.teamId, userId: input.actorId, entityType: 'PROJECT', entityId: project.id, action: 'CREATED', metadata: { name: project.name } });
+    }
+    return project;
   }
 
   async getProject(teamId: string, projectId: string) {
@@ -40,10 +46,27 @@ export class ProjectService {
     });
   }
 
-  async deleteProject(teamId: string, projectId: string) {
+  async deleteProject(teamId: string, projectId: string, actorId?: string) {
     const project = await this.requireProjectInTeam(teamId, projectId);
     await this.projectRepository.delete(project.id);
+    if (this.activityLogService && actorId) {
+      await this.activityLogService.record({ teamId, userId: actorId, entityType: 'PROJECT', entityId: project.id, action: 'DELETED', metadata: { name: project.name } });
+    }
     return { success: true };
+  }
+
+  async requireProjectMembership(projectId: string, userId: string) {
+    const project = await this.projectRepository.findById(projectId);
+    if (!project) {
+      throw new AppError('Project not found', 404);
+    }
+
+    const membership = await this.teamRepository.findMembership(project.teamId, userId);
+    if (!membership) {
+      throw new AppError('You are not a member of this team', 403);
+    }
+
+    return { project, membership };
   }
 
   private async requireTeam(teamId: string) {

@@ -25,6 +25,21 @@ export class PrismaUserRepository implements UserRepository {
     };
   }
 
+  async findById(id: string): Promise<UserRecord | null> {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) return null;
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      passwordHash: user.passwordHash,
+      isActive: user.isActive,
+      emailVerified: user.isEmailVerified,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
+  }
+
   async create(user: Omit<UserRecord, 'createdAt' | 'updatedAt'> & { createdAt?: Date; updatedAt?: Date }): Promise<UserRecord> {
     const created = await this.prisma.user.create({
       data: {

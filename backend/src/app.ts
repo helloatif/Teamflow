@@ -8,6 +8,10 @@ import authRoutes from './routes/auth.js';
 import protectedRoutes from './routes/protected.js';
 import { createTeamsRouter } from './routes/teams.js';
 import { createProjectsRouter } from './routes/projects.js';
+import { createTasksRouter } from './routes/tasks.js';
+import { createCommentsRouter } from './routes/comments.js';
+import { createActivityLogsRouter } from './routes/activityLogs.js';
+import notificationRoutes from './routes/notifications.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { swaggerSpec } from './docs/swagger.js';
 import env from './config/env.js';
@@ -26,12 +30,16 @@ export const createApp = () => {
     res.json({ status: 'ok' });
   });
 
-  app.use('/api/v1/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
   app.use('/api/v1', healthRoutes);
   app.use('/api/v1/auth', authRoutes);
   app.use('/api/v1', protectedRoutes);
   app.use('/api/v1/teams', createTeamsRouter());
   app.use('/api/v1/teams/:teamId/projects', createProjectsRouter());
+  app.use('/api/v1/projects/:projectId/tasks', createTasksRouter());
+  app.use('/api/v1/projects/:projectId/tasks/:taskId/comments', createCommentsRouter());
+  app.use('/api/v1/teams/:teamId/activity', createActivityLogsRouter());
+  app.use('/api/v1/notifications', notificationRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

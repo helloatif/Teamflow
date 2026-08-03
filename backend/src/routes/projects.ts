@@ -7,12 +7,14 @@ import { PrismaProjectRepository } from '../repositories/prismaProjectRepository
 import { PrismaTeamRepository } from '../repositories/prismaTeamRepository.js';
 import { ProjectService } from '../services/projectService.js';
 import { TeamService } from '../services/teamService.js';
+import { ActivityLogService } from '../services/activityLogService.js';
+import { PrismaActivityLogRepository } from '../repositories/prismaActivityLogRepository.js';
 
 export const createProjectsRouter = () => {
   const router = Router({ mergeParams: true });
   const teamRepository = new PrismaTeamRepository(prisma);
   const teamService = new TeamService(teamRepository);
-  const projectService = new ProjectService(new PrismaProjectRepository(prisma), teamRepository);
+  const projectService = new ProjectService(new PrismaProjectRepository(prisma), teamRepository, new ActivityLogService(new PrismaActivityLogRepository(prisma)));
   const projectController = new ProjectController(projectService);
   const member = authorizeTeamRole(teamService, undefined, 'teamId');
   const manager = authorizeTeamRole(teamService, ['OWNER', 'ADMIN'], 'teamId');

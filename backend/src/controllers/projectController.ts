@@ -11,7 +11,7 @@ export class ProjectController {
     const parsed = createProjectSchema.safeParse(req.body);
     if (!parsed.success) return next(new AppError(parsed.error.issues[0]?.message ?? 'Invalid project data', 400));
     try {
-      const project = await this.projectService.createProject({ teamId: String(req.params.teamId), ...parsed.data });
+      const project = await this.projectService.createProject({ teamId: String(req.params.teamId), actorId: req.user!.sub, ...parsed.data });
       res.status(201).json({ success: true, data: project });
     } catch (error) {
       next(error);
@@ -49,7 +49,7 @@ export class ProjectController {
 
   remove = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const result = await this.projectService.deleteProject(String(req.params.teamId), String(req.params.projectId));
+      const result = await this.projectService.deleteProject(String(req.params.teamId), String(req.params.projectId), req.user!.sub);
       res.json({ success: true, data: result });
     } catch (error) {
       next(error);
