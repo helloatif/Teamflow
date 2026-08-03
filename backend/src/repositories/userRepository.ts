@@ -12,4 +12,5 @@ export interface UserRecord {
 export interface UserRepository {
   findByEmail(email: string): Promise<UserRecord | null>;
   create(user: Omit<UserRecord, 'createdAt' | 'updatedAt'> & { createdAt?: Date; updatedAt?: Date }): Promise<UserRecord>;
+  incrementRefreshTokenVersion(userId: string): Promise<void>;
 }

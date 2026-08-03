@@ -5,6 +5,9 @@ import dotenv from 'dotenv';
 import swaggerUi from 'swagger-ui-express';
 import healthRoutes from './routes/health.js';
 import authRoutes from './routes/auth.js';
+import protectedRoutes from './routes/protected.js';
+import { createTeamsRouter } from './routes/teams.js';
+import { createProjectsRouter } from './routes/projects.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { swaggerSpec } from './docs/swagger.js';
 import env from './config/env.js';
@@ -12,23 +15,30 @@ import logger from './config/logger.js';
 
 dotenv.config();
 
-const app = express();
+export const createApp = () => {
+  const app = express();
 
-app.use(helmet());
-app.use(cors());
-app.use(express.json());
+  app.use(helmet());
+  app.use(cors());
+  app.use(express.json());
 
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok' });
-});
+  app.get('/health', (_req, res) => {
+    res.json({ status: 'ok' });
+  });
 
-app.use('/api/v1/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-app.use('/api/v1', healthRoutes);
-app.use('/api/v1/auth', authRoutes);
+  app.use('/api/v1/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+  app.use('/api/v1', healthRoutes);
+  app.use('/api/v1/auth', authRoutes);
+  app.use('/api/v1', protectedRoutes);
+  app.use('/api/v1/teams', createTeamsRouter());
+  app.use('/api/v1/teams/:teamId/projects', createProjectsRouter());
 
-app.use(notFoundHandler);
-app.use(errorHandler);
+  app.use(notFoundHandler);
+  app.use(errorHandler);
 
-logger.info({ environment: env.NODE_ENV, port: env.PORT }, 'TeamFlow backend initialized');
+  logger.info({ environment: env.NODE_ENV, port: env.PORT }, 'TeamFlow backend initialized');
 
-export default app;
+  return app;
+};
+
+export default createApp;

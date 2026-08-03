@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import { AuthService } from '../services/authService.js';
+import type { AuthenticatedRequest } from '../middleware/authenticate.js';
 import { loginSchema, registerSchema } from '../validators/authValidators.js';
 import { successResponse } from '../utils/apiResponse.js';
 import { AppError } from '../errors/appError.js';
@@ -33,5 +34,11 @@ export class AuthController {
       }
       next(error);
     }
+  };
+
+  logout = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const userId = req.user?.sub ?? 'unknown';
+    const result = await this.authService.logout(userId);
+    res.json(successResponse('Logout successful', result));
   };
 }

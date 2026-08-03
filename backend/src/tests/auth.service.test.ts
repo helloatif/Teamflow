@@ -13,6 +13,10 @@ class InMemoryUserRepository {
     this.users.push(user);
     return user;
   }
+
+  async incrementRefreshTokenVersion(_userId: string): Promise<void> {
+    // no-op for unit tests
+  }
 }
 
 describe('AuthService', () => {

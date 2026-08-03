@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { AppError } from '../errors/appError.js';
 import type { UserRepository } from '../repositories/userRepository.js';
+import { signAccessToken, signRefreshToken } from '../utils/jwt.js';
 
 export interface RegisterInput {
   name: string;
@@ -34,7 +35,10 @@ export class AuthService {
       updatedAt: new Date(),
     });
 
-    return { user };
+    const accessToken = signAccessToken({ sub: user.id, email: user.email, role: 'MEMBER' });
+    const refreshToken = signRefreshToken({ sub: user.id, email: user.email, role: 'MEMBER' });
+
+    return { user, accessToken, refreshToken };
   }
 
   async login(input: LoginInput) {
@@ -48,6 +52,14 @@ export class AuthService {
       throw new AppError('Invalid credentials', 401);
     }
 
-    return { user };
+    const accessToken = signAccessToken({ sub: user.id, email: user.email, role: 'MEMBER' });
+    const refreshToken = signRefreshToken({ sub: user.id, email: user.email, role: 'MEMBER' });
+
+    return { user, accessToken, refreshToken };
+  }
+
+  async logout(userId: string) {
+    await this.userRepository.incrementRefreshTokenVersion(userId);
+    return { userId };
   }
 }

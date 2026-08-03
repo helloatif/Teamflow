@@ -8,6 +8,10 @@ export const notFoundHandler = (req: Request, _res: Response, next: NextFunction
 };
 
 export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
+  console.error("========== ERROR ==========");
+  console.error(err);
+  console.error("===========================");
+
   const statusCode = (err as Error & { statusCode?: number }).statusCode || 500;
   const message = statusCode === 500 ? 'Internal Server Error' : err.message;
 

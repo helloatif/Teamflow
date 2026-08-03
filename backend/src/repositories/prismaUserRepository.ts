@@ -50,4 +50,13 @@ export class PrismaUserRepository implements UserRepository {
       updatedAt: created.updatedAt,
     };
   }
+
+  async incrementRefreshTokenVersion(userId: string): Promise<void> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        refreshTokenVersion: { increment: 1 },
+      },
+    });
+  }
 }
