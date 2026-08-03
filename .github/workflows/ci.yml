@@ -17,6 +17,13 @@ jobs:
   verify:
     name: Build and test
     runs-on: ubuntu-latest
+    env:
+      NODE_ENV: test
+      PORT: 5000
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/teamflow?schema=public
+      JWT_SECRET: ci-access-secret-with-at-least-thirty-two-characters
+      JWT_REFRESH_SECRET: ci-refresh-secret-with-at-least-thirty-two-characters
+      CORS_ORIGIN: http://localhost:3000
     defaults:
       run:
         working-directory: backend
