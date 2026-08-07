@@ -1,31 +1,43 @@
 import type { TeamMembership, TeamRepository, TeamRole } from '../repositories/teamRepository.js';
 import { AppError } from '../errors/appError.js';
+import type { Cache } from './cacheService.js';
 
 export class TeamService {
-  constructor(private readonly teamRepository: TeamRepository) {}
+  constructor(private readonly teamRepository: TeamRepository, private readonly cache?: Cache) {}
 
   async createTeam(input: { name: string; description?: string | null; creatorId: string }) {
     if (!input.name?.trim()) {
       throw new AppError('Team name is required', 400);
     }
 
-    return this.teamRepository.create({
+    const team = await this.teamRepository.create({
       name: input.name.trim(),
       description: input.description?.trim() || null,
       creatorId: input.creatorId,
     });
+    await this.cache?.delete(`teams:user:${input.creatorId}`);
+    return team;
   }
 
   async getTeamsForUser(userId: string) {
-    return this.teamRepository.findManyByUser(userId);
+    const key = `teams:user:${userId}`;
+    const cached = await this.cache?.get<Awaited<ReturnType<TeamRepository['findManyByUser']>>>(key);
+    if (cached) return cached;
+    const teams = await this.teamRepository.findManyByUser(userId);
+    await this.cache?.set(key, teams);
+    return teams;
   }
 
   async getTeamById(id: string, userId: string) {
     await this.requireMembership(id, userId);
+    const key = `team:${id}`;
+    const cached = await this.cache?.get<NonNullable<Awaited<ReturnType<TeamRepository['findById']>>>>(key);
+    if (cached) return cached;
     const team = await this.teamRepository.findById(id);
     if (!team) {
       throw new AppError('Team not found', 404);
     }
+    await this.cache?.set(key, team);
     return team;
   }
 
@@ -41,7 +53,9 @@ export class TeamService {
       ...(input.description !== undefined ? { description: input.description?.trim() || null } : {}),
     };
 
-    return this.teamRepository.update(id, payload);
+    const team = await this.teamRepository.update(id, payload);
+    await this.invalidate(id);
+    return team;
   }
 
   async deleteTeam(id: string, userId: string) {
@@ -52,6 +66,7 @@ export class TeamService {
     }
 
     await this.teamRepository.delete(id);
+    await this.invalidate(id);
     return { success: true };
   }
 
@@ -69,7 +84,9 @@ export class TeamService {
       throw new AppError('User is already a team member', 409);
     }
 
-    return this.teamRepository.addMember({ teamId, userId, role: 'MEMBER' });
+    const member = await this.teamRepository.addMember({ teamId, userId, role: 'MEMBER' });
+    await this.invalidate(teamId);
+    return member;
   }
 
   async removeMember(teamId: string, actorId: string, userId: string) {
@@ -81,6 +98,7 @@ export class TeamService {
     }
 
     await this.teamRepository.removeMember(teamId, userId);
+    await this.invalidate(teamId);
     return { success: true };
   }
 
@@ -91,7 +109,9 @@ export class TeamService {
     await this.requireRole(teamId, actorId, ['OWNER']);
     await this.requireMembership(teamId, userId);
 
-    return this.teamRepository.updateRole(teamId, userId, role);
+    const member = await this.teamRepository.updateRole(teamId, userId, role);
+    await this.invalidate(teamId);
+    return member;
   }
 
   async listMembers(teamId: string, userId: string) {
@@ -113,5 +133,10 @@ export class TeamService {
       throw new AppError('You do not have permission to perform this action', 403);
     }
     return membership;
+  }
+
+  private async invalidate(teamId: string): Promise<void> {
+    await this.cache?.delete(`team:${teamId}`);
+    await this.cache?.clear('teams:user:*');
   }
 }

@@ -9,6 +9,7 @@ services:
       - ${TEAMFLOW_ENV_FILE:-./backend/.env}
     environment:
       NODE_ENV: production
+      REDIS_URL: redis://redis:6379
     command:
       - sh
       - -c
@@ -54,6 +55,28 @@ services:
     networks:
       - teamflow
     restart: unless-stopped
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports: ["9090:9090"]
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [teamflow]
+  grafana:
+    image: grafana/grafana:12.1.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports: ["3000:3000"]
+    depends_on: [prometheus]
+    networks: [teamflow]
 
 networks:
   teamflow:
@@ -61,3 +84,5 @@ networks:
 
 volumes:
   postgres_data:
+  prometheus_data:
+  grafana_data:

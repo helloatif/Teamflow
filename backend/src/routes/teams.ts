@@ -5,11 +5,12 @@ import { PrismaTeamRepository } from '../repositories/prismaTeamRepository.js';
 import { authenticate } from '../middleware/authenticate.js';
 import { authorizeTeamRole } from '../middleware/authorizeTeamRole.js';
 import { prisma } from '../config/prisma.js';
+import { cacheService } from '../services/cacheService.js';
 
 export const createTeamsRouter = () => {
   const router = Router();
   const teamRepository = new PrismaTeamRepository(prisma);
-  const teamService = new TeamService(teamRepository);
+  const teamService = new TeamService(teamRepository, cacheService);
   const teamController = new TeamController(teamService);
 
   router.use(authenticate);

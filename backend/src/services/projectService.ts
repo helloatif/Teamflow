@@ -2,12 +2,14 @@ import { AppError } from '../errors/appError.js';
 import type { ProjectRepository, ProjectStatus } from '../repositories/projectRepository.js';
 import type { TeamRepository } from '../repositories/teamRepository.js';
 import type { ActivityLogService } from './activityLogService.js';
+import type { Cache } from './cacheService.js';
 
 export class ProjectService {
   constructor(
     private readonly projectRepository: ProjectRepository,
     private readonly teamRepository: TeamRepository,
-    private readonly activityLogService?: ActivityLogService
+    private readonly activityLogService?: ActivityLogService,
+    private readonly cache?: Cache
   ) {}
 
   async createProject(input: { teamId: string; name: string; description?: string | null; actorId?: string }) {
@@ -20,17 +22,28 @@ export class ProjectService {
     if (this.activityLogService && input.actorId) {
       await this.activityLogService.record({ teamId: input.teamId, userId: input.actorId, entityType: 'PROJECT', entityId: project.id, action: 'CREATED', metadata: { name: project.name } });
     }
+    await this.cache?.delete(`projects:team:${input.teamId}`);
     return project;
   }
 
   async getProject(teamId: string, projectId: string) {
     await this.requireTeam(teamId);
-    return this.requireProjectInTeam(teamId, projectId);
+    const key = `project:${projectId}`;
+    const cached = await this.cache?.get<NonNullable<Awaited<ReturnType<ProjectRepository['findById']>>>>(key);
+    if (cached && cached.teamId === teamId) return cached;
+    const project = await this.requireProjectInTeam(teamId, projectId);
+    await this.cache?.set(key, project);
+    return project;
   }
 
   async listProjects(teamId: string) {
     await this.requireTeam(teamId);
-    return this.projectRepository.findByTeam(teamId);
+    const key = `projects:team:${teamId}`;
+    const cached = await this.cache?.get<Awaited<ReturnType<ProjectRepository['findByTeam']>>>(key);
+    if (cached) return cached;
+    const projects = await this.projectRepository.findByTeam(teamId);
+    await this.cache?.set(key, projects);
+    return projects;
   }
 
   async updateProject(
@@ -39,11 +52,13 @@ export class ProjectService {
     input: { name?: string; description?: string | null; status?: ProjectStatus }
   ) {
     const project = await this.requireProjectInTeam(teamId, projectId);
-    return this.projectRepository.update(project.id, {
+    const updated = await this.projectRepository.update(project.id, {
       ...(input.name !== undefined ? { name: input.name.trim() } : {}),
       ...(input.description !== undefined ? { description: input.description?.trim() || null } : {}),
       ...(input.status !== undefined ? { status: input.status } : {}),
     });
+    await this.invalidate(teamId, project.id);
+    return updated;
   }
 
   async deleteProject(teamId: string, projectId: string, actorId?: string) {
@@ -52,6 +67,7 @@ export class ProjectService {
     if (this.activityLogService && actorId) {
       await this.activityLogService.record({ teamId, userId: actorId, entityType: 'PROJECT', entityId: project.id, action: 'DELETED', metadata: { name: project.name } });
     }
+    await this.invalidate(teamId, project.id);
     return { success: true };
   }
 
@@ -83,5 +99,9 @@ export class ProjectService {
       throw new AppError('Project not found', 404);
     }
     return project;
+  }
+
+  private async invalidate(teamId: string, projectId: string): Promise<void> {
+    await this.cache?.delete(`project:${projectId}`, `projects:team:${teamId}`);
   }
 }

@@ -16,6 +16,8 @@ import { swaggerSpec } from './docs/swagger.js';
 import env from './config/env.js';
 import logger from './config/logger.js';
 import { apiRateLimiter, authRateLimiter, corsOptions } from './middleware/security.js';
+import { metricsMiddleware } from './middleware/metrics.js';
+import { register } from './config/metrics.js';
 
 export const createApp = () => {
   const app = express();
@@ -25,9 +27,13 @@ export const createApp = () => {
   app.use(cors(corsOptions));
   app.use(express.json({ limit: '100kb' }));
   app.use(express.urlencoded({ extended: false, limit: '100kb' }));
+  app.use(metricsMiddleware);
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok' });
+  });
+  app.get('/metrics', async (_req, res, next) => {
+    try { res.set('Content-Type', register.contentType); res.end(await register.metrics()); } catch (error) { next(error); }
   });
 
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));

@@ -13,6 +13,7 @@ import { ActivityLogService } from '../services/activityLogService.js';
 import { PrismaActivityLogRepository } from '../repositories/prismaActivityLogRepository.js';
 import { PrismaNotificationRepository } from '../repositories/prismaNotificationRepository.js';
 import { NotificationService } from '../services/notificationService.js';
+import { cacheService } from '../services/cacheService.js';
 
 export const createTasksRouter = () => {
   const router = Router({ mergeParams: true });
@@ -21,7 +22,8 @@ export const createTasksRouter = () => {
   const taskController = new TaskController(new TaskService(
     new PrismaTaskRepository(prisma), projectService, new PrismaUserRepository(prisma), teamRepository,
     new ActivityLogService(new PrismaActivityLogRepository(prisma)),
-    new NotificationService(new PrismaNotificationRepository(prisma))
+    new NotificationService(new PrismaNotificationRepository(prisma)),
+    cacheService
   ));
   const member = authorizeProjectRole(projectService);
   const manager = authorizeProjectRole(projectService, ['OWNER', 'ADMIN']);

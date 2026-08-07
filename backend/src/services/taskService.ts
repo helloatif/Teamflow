@@ -5,6 +5,7 @@ import type { TeamRepository } from '../repositories/teamRepository.js';
 import type { UserRepository } from '../repositories/userRepository.js';
 import type { ActivityLogService } from './activityLogService.js';
 import type { NotificationService } from './notificationService.js';
+import type { Cache } from './cacheService.js';
 
 export class TaskService {
   constructor(
@@ -13,7 +14,8 @@ export class TaskService {
     private readonly userRepository: UserRepository,
     private readonly teamRepository: TeamRepository,
     private readonly activityLogService?: ActivityLogService,
-    private readonly notificationService?: NotificationService
+    private readonly notificationService?: NotificationService,
+    private readonly cache?: Cache
   ) {}
 
   async createTask(input: { projectId: string; title: string; description?: string | null; createdBy: string }) {
@@ -27,17 +29,28 @@ export class TaskService {
     if (this.activityLogService) {
       await this.activityLogService.record({ teamId: project.teamId, userId: input.createdBy, entityType: 'TASK', entityId: task.id, action: 'CREATED', metadata: { title: task.title } });
     }
+    await this.cache?.delete(`tasks:project:${input.projectId}`);
     return task;
   }
 
   async getTask(projectId: string, taskId: string, userId: string) {
     await this.projectService.requireProjectMembership(projectId, userId);
-    return this.requireTaskInProject(projectId, taskId);
+    const key = `task:${taskId}`;
+    const cached = await this.cache?.get<NonNullable<Awaited<ReturnType<TaskRepository['findById']>>>>(key);
+    if (cached && cached.projectId === projectId) return cached;
+    const task = await this.requireTaskInProject(projectId, taskId);
+    await this.cache?.set(key, task);
+    return task;
   }
 
   async listTasks(projectId: string, userId: string) {
     await this.projectService.requireProjectMembership(projectId, userId);
-    return this.taskRepository.findByProject(projectId);
+    const key = `tasks:project:${projectId}`;
+    const cached = await this.cache?.get<Awaited<ReturnType<TaskRepository['findByProject']>>>(key);
+    if (cached) return cached;
+    const tasks = await this.taskRepository.findByProject(projectId);
+    await this.cache?.set(key, tasks);
+    return tasks;
   }
 
   async updateTask(
@@ -61,6 +74,7 @@ export class TaskService {
     if (this.notificationService && input.status === 'DONE' && task.status !== 'DONE') {
       await this.notificationService.notify({ recipientId: task.createdBy, actorId: userId, type: 'TASK_COMPLETED', entityType: 'TASK', entityId: task.id });
     }
+    await this.invalidate(projectId, task.id);
     return updated;
   }
 
@@ -71,6 +85,7 @@ export class TaskService {
     if (this.activityLogService) {
       await this.activityLogService.record({ teamId: project.teamId, userId, entityType: 'TASK', entityId: task.id, action: 'DELETED', metadata: { title: task.title } });
     }
+    await this.invalidate(projectId, task.id);
     return { success: true };
   }
 
@@ -86,6 +101,7 @@ export class TaskService {
       if (this.activityLogService) {
         await this.activityLogService.record({ teamId: project.teamId, userId: actorId, entityType: 'TASK', entityId: task.id, action: 'UNASSIGNED', metadata: null });
       }
+      await this.invalidate(projectId, task.id);
       return updated;
     }
 
@@ -106,6 +122,7 @@ export class TaskService {
     if (this.notificationService) {
       await this.notificationService.notify({ recipientId: assigneeId, actorId, type: 'TASK_ASSIGNED', entityType: 'TASK', entityId: task.id });
     }
+    await this.invalidate(projectId, task.id);
     return updated;
   }
 
@@ -115,5 +132,9 @@ export class TaskService {
       throw new AppError('Task not found', 404);
     }
     return task;
+  }
+
+  private async invalidate(projectId: string, taskId: string): Promise<void> {
+    await this.cache?.delete(`task:${taskId}`, `tasks:project:${projectId}`);
   }
 }
