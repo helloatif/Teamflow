@@ -125,3 +125,117 @@ describe('TeamService', () => {
     await expect(service.changeRole(team.id, 'member', 'owner', 'MEMBER')).rejects.toBeInstanceOf(AppError);
   });
 });
+
+describe('TeamService with cache', () => {
+  class MockCache {
+    private store: Map<string, string> = new Map();
+    setCalls: Array<{ key: string; value: unknown }> = [];
+    getCalls: string[] = [];
+    deleteCalls: string[] = [];
+
+    async get<T>(key: string): Promise<T | null> {
+      this.getCalls.push(key);
+      const value = this.store.get(key);
+      return value ? (JSON.parse(value) as T) : null;
+    }
+
+    async set<T>(key: string, value: T): Promise<void> {
+      this.setCalls.push({ key, value });
+      this.store.set(key, JSON.stringify(value));
+    }
+
+    async delete(...keys: string[]): Promise<void> {
+      this.deleteCalls.push(...keys);
+      keys.forEach((key) => this.store.delete(key));
+    }
+
+    async clear(_pattern: string): Promise<void> {
+      this.store.clear();
+    }
+  }
+
+  it('cache miss: fetches from repository and stores in cache', async () => {
+    const cache = new MockCache();
+    const repo = new InMemoryTeamRepository();
+    const service = new TeamService(repo, cache);
+    const team = await service.createTeam({ name: 'Test Team', creatorId: 'owner' });
+
+    cache.getCalls = [];
+    cache.setCalls = [];
+
+    const fetched = await service.getTeamById(team.id, 'owner');
+
+    expect(cache.getCalls).toContain(`team:${team.id}`);
+    expect(fetched).toMatchObject({ id: team.id, name: 'Test Team' });
+    expect(cache.setCalls.some((call) => call.key === `team:${team.id}`)).toBe(true);
+  });
+
+  it('cache hit: returns cached team without calling repository', async () => {
+    const cache = new MockCache();
+    const repo = new InMemoryTeamRepository();
+    const service = new TeamService(repo, cache);
+    const team = await service.createTeam({ name: 'Test Team', creatorId: 'owner' });
+
+    await service.getTeamById(team.id, 'owner');
+    cache.getCalls = [];
+
+    const cached = await service.getTeamById(team.id, 'owner');
+
+    expect(cached).toMatchObject({ id: team.id, name: 'Test Team' });
+    expect(cache.getCalls).toContain(`team:${team.id}`);
+  });
+
+  it('update invalidates team cache', async () => {
+    const cache = new MockCache();
+    const repo = new InMemoryTeamRepository();
+    const service = new TeamService(repo, cache);
+    const team = await service.createTeam({ name: 'Test Team', creatorId: 'owner' });
+
+    cache.deleteCalls = [];
+    await service.updateTeam(team.id, 'owner', { name: 'Updated Team' });
+
+    expect(cache.deleteCalls).toContain(`team:${team.id}`);
+  });
+
+  it('delete invalidates team cache', async () => {
+    const cache = new MockCache();
+    const repo = new InMemoryTeamRepository();
+    const service = new TeamService(repo, cache);
+    const team = await service.createTeam({ name: 'Test Team', creatorId: 'owner' });
+
+    cache.deleteCalls = [];
+    await service.deleteTeam(team.id, 'owner');
+
+    expect(cache.deleteCalls).toContain(`team:${team.id}`);
+  });
+
+  it('redis failure during read: falls back to repository', async () => {
+    class FailingCache {
+      async get<T>(_key: string): Promise<T | null> {
+        // Simulate Redis timeout/error by returning null (like real CacheService does with fail-open)
+        return null;
+      }
+
+      async set<T>(_key: string, _value: T): Promise<void> {
+        // fail-open, do nothing
+      }
+
+      async delete(..._keys: string[]): Promise<void> {
+        // fail-open, do nothing
+      }
+
+      async clear(_pattern: string): Promise<void> {
+        // fail-open, do nothing
+      }
+    }
+
+    const cache = new FailingCache();
+    const repo = new InMemoryTeamRepository();
+    const service = new TeamService(repo, cache);
+    const team = await service.createTeam({ name: 'Test Team', creatorId: 'owner' });
+
+    const fetched = await service.getTeamById(team.id, 'owner');
+
+    expect(fetched).toMatchObject({ id: team.id, name: 'Test Team' });
+  });
+});

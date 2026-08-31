@@ -110,3 +110,122 @@ describe('TaskService', () => {
     await expect(service.assignTask(project.id, task.id, 'owner', 'outsider')).rejects.toMatchObject({ statusCode: 400 });
   });
 });
+
+describe('TaskService with cache', () => {
+  class MockCache {
+    private store: Map<string, string> = new Map();
+    setCalls: Array<{ key: string; value: unknown }> = [];
+    getCalls: string[] = [];
+    deleteCalls: string[] = [];
+
+    async get<T>(key: string): Promise<T | null> {
+      this.getCalls.push(key);
+      const value = this.store.get(key);
+      return value ? (JSON.parse(value) as T) : null;
+    }
+
+    async set<T>(key: string, value: T): Promise<void> {
+      this.setCalls.push({ key, value });
+      this.store.set(key, JSON.stringify(value));
+    }
+
+    async delete(...keys: string[]): Promise<void> {
+      this.deleteCalls.push(...keys);
+      keys.forEach((key) => this.store.delete(key));
+    }
+
+    async clear(_pattern: string): Promise<void> {
+      this.store.clear();
+    }
+  }
+
+  const createServiceWithCache = (cache: MockCache) => {
+    const projectRepo = new (class implements ProjectRepository {
+      async create(): Promise<ProjectRecord> {
+        return project;
+      }
+      async findById() {
+        return project;
+      }
+      async findByTeam() {
+        return [project];
+      }
+      async update() {
+        return project;
+      }
+      async delete() {
+        // no-op
+      }
+      async exists() {
+        return true;
+      }
+    })();
+    const projects = new ProjectService(projectRepo, teamRepository(true), undefined, cache);
+    return new TaskService(new InMemoryTaskRepository(), projects, userRepository(), teamRepository(true), undefined, undefined, cache);
+  };
+
+  it('cache miss: fetches task from repository and stores in cache', async () => {
+    const cache = new MockCache();
+    const service = createServiceWithCache(cache);
+    const task = await service.createTask({ projectId: project.id, createdBy: 'owner', title: 'Test Task' });
+
+    cache.getCalls = [];
+    cache.setCalls = [];
+
+    const fetched = await service.getTask(project.id, task.id, 'owner');
+
+    expect(cache.getCalls).toContain(`task:${task.id}`);
+    expect(fetched).toMatchObject({ id: task.id, title: 'Test Task' });
+    expect(cache.setCalls.some((call) => call.key === `task:${task.id}`)).toBe(true);
+  });
+
+  it('cache hit: returns cached task without calling repository', async () => {
+    const cache = new MockCache();
+    const service = createServiceWithCache(cache);
+    const task = await service.createTask({ projectId: project.id, createdBy: 'owner', title: 'Test Task' });
+
+    await service.getTask(project.id, task.id, 'owner');
+    cache.getCalls = [];
+
+    const cached = await service.getTask(project.id, task.id, 'owner');
+
+    expect(cached).toMatchObject({ id: task.id, title: 'Test Task' });
+    expect(cache.getCalls).toContain(`task:${task.id}`);
+  });
+
+  it('update invalidates task cache', async () => {
+    const cache = new MockCache();
+    const service = createServiceWithCache(cache);
+    const task = await service.createTask({ projectId: project.id, createdBy: 'owner', title: 'Test Task' });
+
+    cache.deleteCalls = [];
+    await service.updateTask(project.id, task.id, 'owner', { title: 'Updated Task' });
+
+    expect(cache.deleteCalls).toContain(`task:${task.id}`);
+    expect(cache.deleteCalls).toContain(`tasks:project:${project.id}`);
+  });
+
+  it('delete invalidates task cache', async () => {
+    const cache = new MockCache();
+    const service = createServiceWithCache(cache);
+    const task = await service.createTask({ projectId: project.id, createdBy: 'owner', title: 'Test Task' });
+
+    cache.deleteCalls = [];
+    await service.deleteTask(project.id, task.id, 'owner');
+
+    expect(cache.deleteCalls).toContain(`task:${task.id}`);
+    expect(cache.deleteCalls).toContain(`tasks:project:${project.id}`);
+  });
+
+  it('assignment invalidates task cache', async () => {
+    const cache = new MockCache();
+    const service = createServiceWithCache(cache);
+    const task = await service.createTask({ projectId: project.id, createdBy: 'owner', title: 'Test Task' });
+
+    cache.deleteCalls = [];
+    await service.assignTask(project.id, task.id, 'owner', 'member');
+
+    expect(cache.deleteCalls).toContain(`task:${task.id}`);
+    expect(cache.deleteCalls).toContain(`tasks:project:${project.id}`);
+  });
+});

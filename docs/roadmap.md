@@ -1,24 +1,34 @@
 # Roadmap
 
-## Completed MVP milestones
+## Completed sprints
 
-- Foundation: TypeScript, Express, Prisma, PostgreSQL, and layered architecture
-- Authentication: registration, login, logout, JWT access tokens, and refresh tokens
-- Teams: CRUD, ownership, memberships, and role-based access control
-- Projects: team-scoped project CRUD
-- Tasks: CRUD, assignment, status, and priority
-- Collaboration: task comments, activity logs, and database-backed notifications
-- Quality: Prisma migration hygiene, unit and route tests, and OpenAPI/Swagger UI
-- Documentation: README, architecture, development, deployment plan, and diagrams
+- Sprint 5.1 — CI/CD
+- Sprint 5.2 — Security Hardening
+- Sprint 5.3 — Docker Compose
+- Sprint 5.4 — Redis Caching
+- Sprint 5.5 — Monitoring
+- Sprint 5.6 — Production Documentation & CI Cleanup
 
-## Production engineering roadmap
+## Current sprint
 
-1. GitHub Actions: automated install, Prisma generate, build, lint, and test pipeline.
-2. Security hardening: CORS policy, rate limiting, environment validation, and secure headers.
-3. Redis: introduce targeted caching only where it has clear value.
-4. Docker Compose: run the API, PostgreSQL, and Redis together locally.
-5. NGINX: reverse proxy and production routing.
-6. Cloud deployment: deploy the stack to AWS or Azure and document the operational workflow.
+### Sprint 5.6 — Production Documentation & CI Cleanup
+
+This sprint focuses on bringing the repository, CI pipeline, and production documentation back into alignment with the real codebase.
+
+Completed work for this sprint includes:
+
+- adding lint execution to GitHub Actions
+- documenting the active Docker Compose runtime stack
+- updating the README technology stack and setup instructions
+- correcting false statements about NGINX and cloud deployment
+- aligning the deployment guide and roadmap with the actual implementation status
+
+## Future sprints
+
+- Sprint 5.7 — NGINX Reverse Proxy
+- Sprint 5.8 — AWS Deployment
+
+AWS deployment remains dependent on resolving account access and cloud environment readiness.
 
 ## Deferred ideas
 
@@ -28,4 +38,4 @@
 - Mentions and mention parsing
 - A frontend client
 
-These are intentionally deferred until the core service is secure, automated, observable, and deployable.
+These remain intentionally deferred until the core service is secure, automated, observable, and deployable.

@@ -18,7 +18,7 @@ import { cacheService } from '../services/cacheService.js';
 export const createTasksRouter = () => {
   const router = Router({ mergeParams: true });
   const teamRepository = new PrismaTeamRepository(prisma);
-  const projectService = new ProjectService(new PrismaProjectRepository(prisma), teamRepository);
+  const projectService = new ProjectService(new PrismaProjectRepository(prisma), teamRepository, new ActivityLogService(new PrismaActivityLogRepository(prisma)), cacheService);
   const taskController = new TaskController(new TaskService(
     new PrismaTaskRepository(prisma), projectService, new PrismaUserRepository(prisma), teamRepository,
     new ActivityLogService(new PrismaActivityLogRepository(prisma)),

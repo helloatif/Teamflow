@@ -75,3 +75,85 @@ describe('ProjectService', () => {
     await expect(service.listProjects(team.id)).rejects.toMatchObject({ statusCode: 404 });
   });
 });
+
+describe('ProjectService with cache', () => {
+  class MockCache {
+    private store: Map<string, string> = new Map();
+    setCalls: Array<{ key: string; value: unknown }> = [];
+    getCalls: string[] = [];
+    deleteCalls: string[] = [];
+
+    async get<T>(key: string): Promise<T | null> {
+      this.getCalls.push(key);
+      const value = this.store.get(key);
+      return value ? (JSON.parse(value) as T) : null;
+    }
+
+    async set<T>(key: string, value: T): Promise<void> {
+      this.setCalls.push({ key, value });
+      this.store.set(key, JSON.stringify(value));
+    }
+
+    async delete(...keys: string[]): Promise<void> {
+      this.deleteCalls.push(...keys);
+      keys.forEach((key) => this.store.delete(key));
+    }
+
+    async clear(_pattern: string): Promise<void> {
+      this.store.clear();
+    }
+  }
+
+  it('cache miss: fetches from repository and stores in cache', async () => {
+    const cache = new MockCache();
+    const service = new ProjectService(new InMemoryProjectRepository(), teamRepository(), undefined, cache);
+    const project = await service.createProject({ teamId: team.id, name: 'Backend API' });
+
+    cache.getCalls = [];
+    cache.setCalls = [];
+
+    const fetched = await service.getProject(team.id, project.id);
+
+    expect(cache.getCalls).toContain(`project:${project.id}`);
+    expect(fetched).toMatchObject({ id: project.id, name: 'Backend API' });
+    expect(cache.setCalls.some((call) => call.key === `project:${project.id}`)).toBe(true);
+  });
+
+  it('cache hit: returns cached project without calling repository', async () => {
+    const cache = new MockCache();
+    const service = new ProjectService(new InMemoryProjectRepository(), teamRepository(), undefined, cache);
+    const project = await service.createProject({ teamId: team.id, name: 'Backend API' });
+
+    await service.getProject(team.id, project.id);
+    cache.getCalls = [];
+
+    const cached = await service.getProject(team.id, project.id);
+
+    expect(cached).toMatchObject({ id: project.id, name: 'Backend API' });
+    expect(cache.getCalls).toContain(`project:${project.id}`);
+  });
+
+  it('update invalidates project cache', async () => {
+    const cache = new MockCache();
+    const service = new ProjectService(new InMemoryProjectRepository(), teamRepository(), undefined, cache);
+    const project = await service.createProject({ teamId: team.id, name: 'Backend API' });
+
+    cache.deleteCalls = [];
+    await service.updateProject(team.id, project.id, { name: 'Services' });
+
+    expect(cache.deleteCalls).toContain(`project:${project.id}`);
+    expect(cache.deleteCalls).toContain(`projects:team:${team.id}`);
+  });
+
+  it('delete invalidates project cache', async () => {
+    const cache = new MockCache();
+    const service = new ProjectService(new InMemoryProjectRepository(), teamRepository(), undefined, cache);
+    const project = await service.createProject({ teamId: team.id, name: 'Backend API' });
+
+    cache.deleteCalls = [];
+    await service.deleteProject(team.id, project.id);
+
+    expect(cache.deleteCalls).toContain(`project:${project.id}`);
+    expect(cache.deleteCalls).toContain(`projects:team:${team.id}`);
+  });
+});

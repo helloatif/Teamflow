@@ -1,5 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
-import type { NotificationEntityType, NotificationRecord, NotificationRepository, NotificationType } from './notificationRepository.js';
+import type { NotificationRecord, NotificationRepository } from './notificationRepository.js';
 
 export class PrismaNotificationRepository implements NotificationRepository {
   constructor(private readonly prisma: PrismaClient) {}

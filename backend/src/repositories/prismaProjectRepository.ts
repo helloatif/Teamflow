@@ -18,7 +18,7 @@ export class PrismaProjectRepository implements ProjectRepository {
 
   async findByTeam(teamId: string): Promise<ProjectRecord[]> {
     const projects = await this.prisma.project.findMany({ where: { teamId }, orderBy: { createdAt: 'desc' } });
-    return projects.map((project) => this.toRecord(project));
+    return projects.map((project: { id: string; name: string; description: string | null; status: ProjectStatus; teamId: string; createdAt: Date; updatedAt: Date; }) => this.toRecord(project));
   }
 
   async update(id: string, input: { name?: string; description?: string | null; status?: ProjectStatus }): Promise<ProjectRecord> {

@@ -40,7 +40,7 @@ export class PrismaTeamRepository implements TeamRepository {
       orderBy: { createdAt: 'desc' },
     });
 
-    return rows.map((team) => ({
+    return rows.map((team: { id: string; name: string; description: string | null; createdAt: Date; updatedAt: Date; deletedAt: Date | null; }) => ({
       id: team.id,
       name: team.name,
       description: team.description,
@@ -126,7 +126,7 @@ export class PrismaTeamRepository implements TeamRepository {
       orderBy: { createdAt: 'asc' },
     });
 
-    return members.map((member) => this.toMembership(member));
+    return members.map((member: { userId: string; teamId: string; role: TeamRole; createdAt: Date; updatedAt: Date; user?: { id: string; name: string; email: string; } }) => this.toMembership(member));
   }
 
   async updateRole(teamId: string, userId: string, role: TeamRole): Promise<TeamMembership> {

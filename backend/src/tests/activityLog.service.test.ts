@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ActivityLogRecord, ActivityLogRepository } from '../repositories/activityLogRepository.js';
+import { PrismaActivityLogRepository } from '../repositories/prismaActivityLogRepository.js';
 import { ActivityLogService } from '../services/activityLogService.js';
 import { listActivitySchema } from '../validators/activityLogValidators.js';
 
@@ -38,6 +39,45 @@ describe('ActivityLogService', () => {
     await service.record({ teamId: 'team-1', userId: 'user-1', entityType: 'COMMENT', entityId: 'comment-1', action: 'COMMENT_ADDED' });
     await expect(service.list('team-1', { entityType: 'TASK', limit: 1 })).resolves.toMatchObject([{ action: 'STATUS_CHANGED' }]);
     await expect(service.list('team-1', { action: 'COMMENT_ADDED' })).resolves.toHaveLength(1);
+  });
+
+  it('allows JSON null values within metadata while preserving top-level nulls', async () => {
+    const create = vi.fn().mockResolvedValue({
+      id: 'activity-1',
+      teamId: 'team-1',
+      userId: 'user-1',
+      entityType: 'TASK',
+      entityId: 'task-1',
+      action: 'STATUS_CHANGED',
+      metadata: { taskId: 'task-1', previousStatus: null },
+      createdAt: new Date(),
+    });
+
+    const repository = new PrismaActivityLogRepository({ activityLog: { create, findMany: vi.fn() } } as any);
+
+    await expect(repository.create({
+      teamId: 'team-1',
+      userId: 'user-1',
+      entityType: 'TASK',
+      entityId: 'task-1',
+      action: 'STATUS_CHANGED',
+      metadata: { taskId: 'task-1', previousStatus: null },
+    })).resolves.toMatchObject({ metadata: { taskId: 'task-1', previousStatus: null } });
+
+    await expect(repository.create({
+      teamId: 'team-1',
+      userId: 'user-1',
+      entityType: 'TASK',
+      entityId: 'task-1',
+      action: 'UNASSIGNED',
+      metadata: null,
+    })).resolves.toMatchObject({ metadata: null });
+
+    expect(create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        metadata: { taskId: 'task-1', previousStatus: null },
+      }),
+    });
   });
 
   it('rejects invalid activity filters', () => {

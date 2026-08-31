@@ -2,6 +2,7 @@ export type ActivityEntityType = 'PROJECT' | 'TASK' | 'COMMENT' | 'TEAM';
 export type ActivityAction =
   | 'CREATED' | 'UPDATED' | 'DELETED' | 'ASSIGNED' | 'UNASSIGNED'
   | 'STATUS_CHANGED' | 'ROLE_CHANGED' | 'COMMENT_ADDED' | 'COMMENT_EDITED' | 'COMMENT_DELETED';
+export type ActivityLogMetadata = Record<string, unknown> | null;
 
 export interface ActivityLogRecord {
   id: string;
@@ -10,7 +11,7 @@ export interface ActivityLogRecord {
   entityType: ActivityEntityType;
   entityId: string;
   action: ActivityAction;
-  metadata: Record<string, unknown> | null;
+  metadata: ActivityLogMetadata;
   createdAt: Date;
 }
 
